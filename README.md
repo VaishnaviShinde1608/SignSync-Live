@@ -1,7 +1,7 @@
 # SignSync Live
 ### Real-Time Sign Language Translation System
 
-![SignSync Demo](05-sign-detection-side.png)
+![SignSync Demo](05-sign-detection-side.jpg)
 
 ## Overview
 
@@ -98,11 +98,11 @@ The aim of this project is to develop a simple, affordable, and accessible syste
 
 ### Real-Time Sign Detection (Deaf User Side)
 
-![Sign Detection](05-sign-detection-side.png)
+![Sign Detection](05-sign-detection-side.jpg)
 
 ### Hearing User Side
 
-![Hearing User Side](06-Hearing-Person-side.png)
+![Hearing User Side](06-Hearing-Person-side.jpeg)
 
 ---
 
