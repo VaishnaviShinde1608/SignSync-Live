@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SignSync Live – Real-time Sign Language Translation</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!--
+    ══════════════════════════════════════════════════════
+    WEEK 3 — MediaPipe CDN Scripts
+    These three scripts give us hand tracking in the browser.
+    They must be loaded BEFORE script.js runs.
+
+    1. camera_utils  — helper that feeds webcam frames into the model
+    2. drawing_utils — helper that draws dots and lines on a canvas
+    3. hands         — the actual AI hand-detection model
+    ══════════════════════════════════════════════════════
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <!--
+    WEEK 5 — Socket.io client
+    Provides the io() function used in initSignaling() in script.js.
+    Must be loaded BEFORE script.js so io() is available when
+    DOMContentLoaded fires and initSignaling() is called.
+    Version must match the server-side socket.io package (^4.x).
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
+</head>
+<body>
+
+
+<!-- ============================================================
+     SCREEN 1: SIGN IN
+     IDs: signin-form, signin-email-wrap, signin-email,
+          signin-pw-wrap, signin-pw, signin-pw-eye
+============================================================ -->
+<section id="screen-signin" class="screen auth-layout">
+  <div class="card fade-in">
+
+    <!-- Logo -->
+    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1.75rem;">
+      <div class="logo-mark">
+        <svg class="icon" width="22" height="22" viewBox="0 0 24 24" stroke="#2563eb" aria-hidden="true">
+          <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="logo-name">SignSync <span>Live</span></p>
+        <p class="logo-sub">Sign language translation</p>
+      </div>
+    </div>
+
+    <h1 class="heading-xl mb-2">Welcome back</h1>
+    <p class="subtext mb-6">Sign in to your account to continue</p>
+
+    <form id="signin-form" novalidate>
+
+      <div class="form-group" id="signin-email-wrap">
+        <label for="signin-email">Email</label>
+        <input class="field" id="signin-email" type="email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+
+      <div class="form-group" id="signin-pw-wrap">
+        <label for="signin-pw">Password</label>
+        <div class="pw-wrap">
+          <input class="field" id="signin-pw" type="password" placeholder="Your password" autocomplete="current-password" />
+          <button type="button" class="pw-eye" id="signin-pw-eye" aria-label="Toggle password">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary w-full mt-3">
+        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="white">
+          <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+        </svg>
+        Sign In
+      </button>
+
+    </form>
+
+    <div class="mt-5">
+      <button onclick="navigate('forgot')" class="link" style="display:block; text-align:center; width:100%; margin-bottom:0.75rem;">
+        Forgot password?
+      </button>
+      <div class="divider">or</div>
+      <p style="text-align:center; font-size:0.88rem; color:var(--muted); margin-top:0.65rem;">
+        No account? <button onclick="navigate('signup')" class="link">Create one</button>
+      </p>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SCREEN 2: USER TYPE SELECTION (after sign-in)
+     IDs: ut-form, ut-deaf, ut-hearing,
+          ut-deaf-check, ut-hearing-check, ut-continue
+============================================================ -->
+<section id="screen-signin-type" class="screen auth-layout">
+  <div class="card fade-in" style="max-width:480px;">
+
+    <div style="width:3rem; height:3rem; border-radius:0.75rem; background:var(--blue-light); display:flex; align-items:center; justify-content:center; margin-bottom:1.25rem;">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" stroke="#2563eb">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    </div>
+
+    <h2 class="heading-xl mb-2">One more step</h2>
+    <p class="subtext mb-7">Tell us how you communicate so we can set up the right translation for you.</p>
+
+    <form id="ut-form" data-selected="">
+      <div class="type-card-grid">
+
+        <!-- Deaf card -->
+        <button type="button" class="type-card" id="ut-deaf">
+          <div class="type-card-icon">
+            <svg class="icon" width="24" height="24" viewBox="0 0 24 24" stroke="#94a3b8">
+              <path d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"/>
+            </svg>
+          </div>
+          <p class="type-card-title">Sign Language User</p>
+          <p class="type-card-desc">I'm Deaf or Hard of Hearing and communicate using sign language.</p>
+          <span class="badge badge-blue mt-2" style="font-size:0.7rem;">Signs → Speech</span>
+          <div class="type-card-check" id="ut-deaf-check" style="display:none;">
+            <svg class="icon" width="14" height="14" viewBox="0 0 24 24" stroke="#2563eb"><polyline points="20 6 9 17 4 12"/></svg>
+            Selected
+          </div>
+        </button>
+
+        <!-- Hearing card -->
+        <button type="button" class="type-card" id="ut-hearing">
+          <div class="type-card-icon">
+            <svg class="icon" width="24" height="24" viewBox="0 0 24 24" stroke="#94a3b8">
+              <path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+            </svg>
+          </div>
+          <p class="type-card-title">Hearing Person</p>
+          <p class="type-card-desc">I can hear and speak, communicating through spoken language.</p>
+          <span class="badge badge-teal mt-2" style="font-size:0.7rem;">Speech → Text</span>
+          <div class="type-card-check" id="ut-hearing-check" style="display:none; color:var(--teal);">
+            <svg class="icon" width="14" height="14" viewBox="0 0 24 24" stroke="#14b8a6"><polyline points="20 6 9 17 4 12"/></svg>
+            Selected
+          </div>
+        </button>
+
+      </div>
+
+      <button type="button" id="ut-continue" class="btn btn-primary w-full">
+        Continue
+        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="white">
+          <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+        </svg>
+      </button>
+    </form>
+
+    <button onclick="navigate('signin')" class="btn btn-outline w-full mt-3">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="currentColor">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Back
+    </button>
+
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SCREEN 3: SIGN UP
+     IDs: signup-form, su-form, su-deaf, su-hearing,
+          su-deaf-check, su-hearing-check, su-name, su-email,
+          su-pw, su-pw-eye, su-confirm, su-error
+============================================================ -->
+<section id="screen-signup" class="screen auth-layout">
+  <div class="card card-scroll fade-in" style="max-width:440px;">
+
+    <h2 class="heading-xl mb-2">Create account</h2>
+    <p class="subtext mb-6">Join SignSync Live today</p>
+
+    <form id="signup-form" novalidate>
+      <!-- su-form is a nested div so the form clone doesn't wipe our data attribute -->
+      <div id="su-form" data-selected="">
+
+        <div class="form-group">
+          <label>How do you communicate?</label>
+          <div class="type-card-grid" style="margin-top:0.4rem;">
+
+            <button type="button" class="type-card" id="su-deaf">
+              <div class="type-card-icon">
+                <svg class="icon" width="22" height="22" viewBox="0 0 24 24" stroke="#94a3b8">
+                  <path d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"/>
+                </svg>
+              </div>
+              <p class="type-card-title">Sign Language</p>
+              <p class="type-card-desc">Deaf / Hard of Hearing</p>
+              <div class="type-card-check" id="su-deaf-check" style="display:none;">
+                <svg class="icon" width="13" height="13" viewBox="0 0 24 24" stroke="#2563eb"><polyline points="20 6 9 17 4 12"/></svg>
+                Selected
+              </div>
+            </button>
+
+            <button type="button" class="type-card" id="su-hearing">
+              <div class="type-card-icon">
+                <svg class="icon" width="22" height="22" viewBox="0 0 24 24" stroke="#94a3b8">
+                  <path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+                </svg>
+              </div>
+              <p class="type-card-title">Spoken Language</p>
+              <p class="type-card-desc">Hearing Person</p>
+              <div class="type-card-check" id="su-hearing-check" style="display:none; color:var(--teal);">
+                <svg class="icon" width="13" height="13" viewBox="0 0 24 24" stroke="#14b8a6"><polyline points="20 6 9 17 4 12"/></svg>
+                Selected
+              </div>
+            </button>
+
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="su-name">Full Name</label>
+          <input class="field" id="su-name" type="text" placeholder="Jane Smith" autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label for="su-email">Email</label>
+          <input class="field" id="su-email" type="email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+
+        <div class="form-group">
+          <label for="su-pw">Password</label>
+          <div class="pw-wrap">
+            <input class="field" id="su-pw" type="password" placeholder="Create a strong password" autocomplete="new-password" />
+            <button type="button" class="pw-eye" id="su-pw-eye" aria-label="Toggle password">
+              <svg class="icon" width="18" height="18" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="su-confirm">Confirm Password</label>
+          <input class="field" id="su-confirm" type="password" placeholder="Repeat your password" autocomplete="new-password" />
+        </div>
+
+        <p id="su-error" style="color:var(--red); font-size:0.82rem; text-align:center; min-height:1.2rem; margin-bottom:0.5rem;"></p>
+
+        <button type="submit" class="btn btn-primary w-full">
+          Create Account
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="white">
+            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </button>
+
+      </div><!-- end su-form -->
+    </form>
+
+    <button onclick="navigate('signin')" class="btn btn-outline w-full mt-3">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="currentColor">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Back to Sign In
+    </button>
+
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SCREEN 4: FORGOT PASSWORD
+     IDs: forgot-wrapper, forgot-form, forgot-email, forgot-success
+============================================================ -->
+<section id="screen-forgot" class="screen auth-layout">
+  <div class="card fade-in">
+
+    <div style="width:3.5rem; height:3.5rem; border-radius:0.85rem; background:var(--teal-light); display:flex; align-items:center; justify-content:center; margin:0 auto 1.25rem;">
+      <svg class="icon" width="26" height="26" viewBox="0 0 24 24" stroke="#14b8a6">
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+      </svg>
+    </div>
+
+    <h2 class="heading-xl text-center mb-2">Reset Password</h2>
+    <p class="subtext text-center mb-6">Enter your email to receive reset instructions.</p>
+
+    <div id="forgot-wrapper">
+      <form id="forgot-form" novalidate>
+        <div class="form-group">
+          <label for="forgot-email">Email</label>
+          <input class="field" id="forgot-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+        </div>
+        <button type="submit" class="btn btn-accent w-full">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="white">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          Send Reset Link
+        </button>
+      </form>
+    </div>
+
+    <div id="forgot-success" style="display:none; text-align:center; padding:1rem 0;">
+      <div class="success-icon">
+        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" stroke="#14b8a6">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </div>
+      <p style="font-weight:600; color:var(--txt); margin-bottom:0.35rem;">Email sent successfully!</p>
+      <p class="subtext">Redirecting to sign in…</p>
+    </div>
+
+    <button onclick="navigate('signin')" class="link"
+      style="display:flex; align-items:center; justify-content:center; gap:0.4rem; width:100%; font-size:0.9rem; margin-top:1.25rem; padding:0.5rem 0;">
+      <svg class="icon" width="15" height="15" viewBox="0 0 24 24" stroke="#2563eb">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Back to Sign In
+    </button>
+
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SCREEN 5: HOME DASHBOARD
+     IDs: home-username, home-userbadge, home-hero-desc,
+          home-feature-translation, home-room-input,
+          btn-join-room, btn-new-room, btn-sign-out
+============================================================ -->
+<section id="screen-home" class="screen" style="flex-direction:column; background:var(--surface);">
+
+  <header class="home-nav">
+    <div class="home-nav-left">
+      <div class="logo-mark">
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" stroke="#2563eb">
+          <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <div class="home-nav-user">
+        <span class="logo-name" style="font-size:1rem;">SignSync <span>Live</span></span>
+        <span style="color:var(--muted-2);">·</span>
+        <span class="home-nav-name" id="home-username">Hello</span>
+        <span class="badge badge-blue" id="home-userbadge">User</span>
+      </div>
+    </div>
+    <button class="btn-signout" id="btn-sign-out">
+      <svg class="icon" width="15" height="15" viewBox="0 0 24 24" stroke="#dc2626">
+        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      Sign Out
+    </button>
+  </header>
+
+  <main class="home-main">
+    <div class="home-inner slide-up">
+
+      <div style="text-align:center; margin-bottom:2rem;">
+        <div class="hero-badge">
+          <svg class="icon" width="13" height="13" viewBox="0 0 24 24" stroke="#2563eb">
+            <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/>
+          </svg>
+          Real-time Translation
+        </div>
+        <h1 class="home-title">Sign<span>Sync</span> Live</h1>
+        <p class="home-subtitle" id="home-hero-desc">Bridging communication in real-time.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" stroke="#2563eb">
+              <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <p class="feature-label">HD Video</p>
+          <p class="feature-desc">Crystal clear</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" stroke="#2563eb">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <p class="feature-label">Live Translation</p>
+          <p class="feature-desc" id="home-feature-translation">Signs → Speech</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" stroke="#2563eb">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </div>
+          <p class="feature-label">Collaboration</p>
+          <p class="feature-desc">Connect anyone</p>
+        </div>
+      </div>
+
+      <div class="meeting-controls">
+        <div class="meeting-join-row">
+          <input class="field" id="home-room-input" type="text" placeholder="Enter Room ID (e.g. room-481234)" />
+          <button class="btn btn-primary" id="btn-join-room">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="white">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+            Join
+          </button>
+        </div>
+        <div class="divider">or</div>
+        <button class="btn btn-accent w-full" id="btn-new-room">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="white">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Start New Meeting
+        </button>
+      </div>
+
+    </div>
+  </main>
+
+</section>
+
+
+<!-- ============================================================
+     SCREEN 6: VIDEO ROOM
+     IDs: video-room-id, video-nav-user, video-type-badge,
+          video-status-dot, video-status-label,
+          video-overlay-dot, video-overlay-title,
+          video-overlay-box, video-overlay-arrow,
+          video-local-label, local-video,
+          remote-video, remote-placeholder,
+          remote-title, remote-hint,
+          translation-dot, translation-label, translation-output,
+          ctrl-mic, ctrl-camera, ctrl-leave, video-back
+============================================================ -->
+<section id="screen-video" class="screen" style="flex-direction:column; background:#0f172a;">
+
+  <header class="video-nav">
+    <button id="video-back" style="background:none; border:none; cursor:pointer; padding:0.3rem; border-radius:0.4rem; display:flex; align-items:center;">
+      <svg class="icon" width="18" height="18" viewBox="0 0 24 24" stroke="#64748b">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+    </button>
+
+    <div class="video-nav-info">
+      <p class="video-room-id" id="video-room-id">Room: —</p>
+      <div class="video-status-row">
+        <span class="status-dot-wrap">
+          <span class="status-dot pulse" id="video-status-dot" style="background:#f59e0b;"></span>
+          <span id="video-status-label" style="color:#f59e0b; font-size:0.78rem; font-weight:600;">Connecting…</span>
+        </span>
+        <span style="color:#475569; font-size:0.78rem;">·</span>
+        <span class="video-nav-user" id="video-nav-user"></span>
+        <span class="badge" id="video-type-badge" style="background:rgba(37,99,235,0.2); color:#93c5fd; font-size:0.72rem;"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="video-main">
+
+    <div class="video-grid">
+
+      <!-- Local video (your camera) -->
+      <div class="video-panel" style="min-height:300px; position:relative;">
+        <video id="local-video" autoplay muted playsinline style="min-height:300px; max-height:520px;"></video>
+
+        <!--
+          WEEK 3 — Hand Tracking Canvas
+          ─────────────────────────────────────────────────────
+          This canvas sits exactly on top of the video.
+          position:absolute + inset:0 makes it cover the video perfectly.
+          width:100% / height:100% makes it stretch to match the video size.
+          pointer-events:none means clicks pass through to the video below.
+          transform:scaleX(-1) mirrors it to match the flipped webcam feed —
+            WITHOUT this, the skeleton would appear on the wrong hand.
+          z-index:2 places it above the video (z-index:1) but below the
+            overlay labels (z-index:10+).
+        -->
+        <canvas
+          id="local-canvas"
+          style="
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            transform: scaleX(-1);
+            z-index: 2;
+          "
+        ></canvas>
+
+        <!-- Translation overlay top-right -->
+        <div class="translation-overlay">
+          <div class="translation-overlay-title">
+            <span class="status-dot pulse" id="video-overlay-dot" style="background:#818cf8;"></span>
+            <span id="video-overlay-title">Sign Translation</span>
+          </div>
+          <div class="translation-box" id="video-overlay-box">Waiting…</div>
+          <p class="translation-footer" id="video-overlay-arrow">Signs → Speech</p>
+        </div>
+
+        <!-- You label bottom-left -->
+        <div class="video-label" id="video-local-label" style="background:rgba(37,99,235,0.8);">You</div>
+      </div>
+
+      <!-- Remote video (other participant) -->
+      <div class="video-panel" id="remote-panel" style="min-height:260px; border-style:dashed; border-color:#1e293b;">
+
+        <video id="remote-video" autoplay playsinline style="display:none; min-height:260px; max-height:520px;"></video>
+
+        <div class="video-remote-placeholder" id="remote-placeholder">
+          <div class="remote-avatar">
+            <svg class="icon" width="28" height="28" viewBox="0 0 24 24" stroke="#475569">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <p class="remote-title" id="remote-title">Remote Participant</p>
+          <p class="remote-sub" id="remote-hint">Waiting for connection…</p>
+          <p style="margin-top:0.75rem; font-size:0.7rem; font-family:var(--font-mono); color:#334155;">
+            WebRTC peer connection ready
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Translation output panel -->
+    <div class="translation-panel">
+      <div class="translation-panel-inner">
+        <span class="translation-dot pulse" id="translation-dot" style="background:#14b8a6;"></span>
+        <div style="flex:1;">
+          <div class="translation-panel-label" id="translation-label">Translation output</div>
+          <div class="translation-output" id="translation-output">Translation will appear here…</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Floating control bar -->
+  <div class="control-bar">
+    <button class="ctrl-btn ctrl-on" id="ctrl-mic" title="Mute microphone">
+      <svg class="icon" width="20" height="20" viewBox="0 0 24 24" stroke="#2563eb">
+        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+        <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+
+    <button class="ctrl-btn ctrl-on" id="ctrl-camera" title="Turn off camera">
+      <svg class="icon" width="20" height="20" viewBox="0 0 24 24" stroke="#2563eb">
+        <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+      </svg>
+    </button>
+
+    <div class="ctrl-divider"></div>
+
+    <button class="btn btn-danger" id="ctrl-leave" style="padding:0.6rem 1.25rem;">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" stroke="white">
+        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.09 2.18 2 2 0 012.09 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-1.35a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+      </svg>
+      Leave
+    </button>
+  </div>
+
+</section>
+
+
+<script src="script.js"></script>
+</body>
+</html>
