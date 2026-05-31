@@ -1,7 +1,7 @@
 # SignSync Live
 ### Real-Time Sign Language Translation System
 
-![SignSync Demo](05-sign-detection-side.jpg)
+![SignSync Demo](0-First-Page.png)
 
 ## Overview
 
