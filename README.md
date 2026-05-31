@@ -1,7 +1,7 @@
 # SignSync Live
 ### Real-Time Sign Language Translation System
 
-![SignSync Demo](Screenshots/05-sign-detection-side.png)
+![SignSync Demo](05-sign-detection-side.png)
 
 ## Overview
 
@@ -82,27 +82,27 @@ The aim of this project is to develop a simple, affordable, and accessible syste
 
 ### Login Page
 
-![Login Page](Screenshots/01-login-page.png)
+![Login Page](01-login-page.png)
 
 ### User Type Selection
 
-![User Type Selection](Screenshots/02-user-type-selection.png)
+![User Type Selection](02-user-type-selection.png)
 
 ### Meeting Dashboard
 
-![Meeting Dashboard](Screenshots/03-meeting-dashboard.png)
+![Meeting Dashboard](03-meeting-dashboard.png)
 
 ### Video Communication Screen
 
-![Video Communication Screen](Screenshots/04-video-call-screen.png)
+![Video Communication Screen](04-video-call-screen.png)
 
 ### Real-Time Sign Detection (Deaf User Side)
 
-![Sign Detection](Screenshots/05-sign-detection-side.png)
+![Sign Detection](05-sign-detection-side.png)
 
 ### Hearing User Side
 
-![Hearing User Side](Screenshots/06-Hearing-Person-side.png)
+![Hearing User Side](06-Hearing-Person-side.png)
 
 ---
 
